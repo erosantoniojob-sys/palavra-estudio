@@ -13,6 +13,7 @@
     title: $("#inTitle"), speaker: $("#inSpeaker"), kind: $("#inKind"), lang: $("#inLang"),
     status: $("#status"), saveState: $("#saveState"), timer: $("#timer"), wave: $("#wave"),
     rec: $("#btnRec"), stop: $("#btnStop"), para: $("#btnPara"), hint: $("#hint"),
+    importBtn: $("#btnImport"), audioFile: $("#audioFile"), importProgress: $("#importProgress"), importStatus: $("#importStatus"),
     player: $("#player"), paras: $("#paras"), interim: $("#interim"), empty: $("#empty"),
     doc: $("#doc"), docKind: $("#docKind"), docTitle: $("#docTitle"), docBy: $("#docBy"),
     words: $("#stWords"), count: $("#stParas"),
@@ -38,6 +39,8 @@
   let recog = null, wantListening = false;
   let wakeLock = null;
   let audioURL = null;
+  let importing = false;
+  let transcriberPromise = null;
 
   function blankSession() {
     return {
@@ -321,7 +324,7 @@
     const opts = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
     return opts.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
   }
-  const audioExt = (m) => (m.includes("mp4") ? "m4a" : m.includes("ogg") ? "ogg" : "webm");
+  const audioExt = (m) => m.includes("mpeg") ? "mp3" : m.includes("wav") ? "wav" : m.includes("flac") ? "flac" : m.includes("mp4") ? "m4a" : m.includes("ogg") ? "ogg" : "webm";
 
   function setupMeter(s) {
     try {
@@ -369,6 +372,153 @@
   async function lockScreen() {
     try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch {}
   }
+
+  // ---------- Importação e transcrição local ----------
+  function fileDuration(file) {
+    return new Promise((resolve, reject) => {
+      const probe = document.createElement("audio");
+      const url = URL.createObjectURL(file);
+      const clean = () => { probe.removeAttribute("src"); URL.revokeObjectURL(url); };
+      probe.onloadedmetadata = () => { const duration = probe.duration; clean(); resolve(duration); };
+      probe.onerror = () => { clean(); reject(new Error("Não foi possível ler a duração deste áudio.")); };
+      probe.src = url;
+    });
+  }
+
+  async function getTranscriber() {
+    if (!transcriberPromise) {
+      transcriberPromise = import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2")
+        .then(({ pipeline }) => pipeline("automatic-speech-recognition", "onnx-community/whisper-tiny", {
+          progress_callback: (progress) => {
+            if (progress.status === "progress" && Number.isFinite(progress.progress)) {
+              el.importStatus.textContent = `Baixando modelo de transcrição: ${Math.round(progress.progress)}%`;
+            } else if (progress.status === "initiate") {
+              el.importStatus.textContent = "Preparando modelo de transcrição…";
+            }
+          },
+        }))
+        .catch((error) => { transcriberPromise = null; throw error; });
+    }
+    return transcriberPromise;
+  }
+
+  function toMono16k(buffer) {
+    const length = Math.ceil(buffer.length * 16000 / buffer.sampleRate);
+    const mono = new Float32Array(length);
+    const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
+    const ratio = buffer.sampleRate / 16000;
+    for (let i = 0; i < length; i++) {
+      const pos = i * ratio, left = Math.floor(pos), mix = pos - left;
+      let sample = 0;
+      for (const channel of channels) {
+        const a = channel[Math.min(left, buffer.length - 1)];
+        const b = channel[Math.min(left + 1, buffer.length - 1)];
+        sample += a + (b - a) * mix;
+      }
+      mono[i] = sample / channels.length;
+    }
+    return mono;
+  }
+
+  function addImportedText(result, durationMs) {
+    const segments = result.chunks?.length
+      ? result.chunks.map((chunk) => ({
+        text: chunk.text.trim(),
+        start: chunk.timestamp?.[0] == null ? null : chunk.timestamp[0] * 1000,
+        end: chunk.timestamp?.[1] == null ? null : chunk.timestamp[1] * 1000,
+      })).filter((chunk) => chunk.text)
+      : (result.text.match(/[^.!?]+[.!?]?/g) || [result.text]).map((text) => ({ text: text.trim() }));
+    let previousEnd = 0;
+    for (const segment of segments) {
+      const start = segment.start == null ? previousEnd : segment.start;
+      const end = segment.end == null ? start + 3000 : segment.end;
+      let paragraph = session.paragraphs[session.paragraphs.length - 1];
+      const gapMs = parseFloat(el.optGap.value) * 1000;
+      if (!paragraph || start - previousEnd > gapMs || countWords(paraText(paragraph)) > MAX_WORDS_PER_PARA) {
+        paragraph = { id: Math.random().toString(36).slice(2, 10), start, chunks: [] };
+        session.paragraphs.push(paragraph);
+      }
+      paragraph.chunks.push({ raw: segment.text, s: start, t: end });
+      previousEnd = end;
+    }
+    session.duration = durationMs;
+    renderAll();
+    updateSeekable();
+  }
+
+  async function importAudio(file) {
+    if (!file) return;
+    if (status === "recording" || status === "paused" || importing) {
+      toast("Encerre a gravação ou transcrição atual antes de importar outro áudio.");
+      return;
+    }
+    if (!file.type.startsWith("audio/") && !/\.(mp3|m4a|wav|ogg|webm|flac)$/i.test(file.name)) {
+      toast("Escolha um arquivo de áudio compatível.");
+      return;
+    }
+    if (session.audio || session.paragraphs.length) {
+      if (!confirm("A importação criará uma nova sessão. Continuar?")) return;
+    }
+
+    importing = true;
+    el.importBtn.disabled = true;
+    el.importProgress.hidden = false;
+    el.importStatus.textContent = "Verificando arquivo…";
+    try {
+      const duration = await fileDuration(file);
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error("Não foi possível identificar a duração do áudio.");
+      if (duration > 45 * 60) throw new Error("Por enquanto, a duração máxima para importar é 45 minutos.");
+
+      newSession(true);
+      session.title = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+      session.audio = file;
+      session.mime = file.type || "audio/mpeg";
+      session.audioName = file.name;
+      session.duration = duration * 1000;
+      el.title.value = session.title;
+      syncMeta();
+      showPlayer();
+      await save();
+
+      el.importStatus.textContent = "Lendo áudio no aparelho…";
+      const context = new (window.AudioContext || window.webkitAudioContext)();
+      let buffer;
+      try { buffer = await context.decodeAudioData(await file.arrayBuffer()); }
+      finally { await context.close(); }
+      const audio = toMono16k(buffer);
+      buffer = null;
+
+      el.importStatus.textContent = "Carregando o modelo de transcrição…";
+      const transcriber = await getTranscriber();
+      el.importStatus.textContent = "Transcrevendo no aparelho… Áudios longos podem levar alguns minutos.";
+      const language = { "pt-BR": "portuguese", "pt-PT": "portuguese", "en-US": "english", "es-ES": "spanish" }[el.lang.value] || "portuguese";
+      const result = await transcriber(audio, {
+        chunk_length_s: 30, stride_length_s: 5, return_timestamps: true,
+        language, task: "transcribe",
+      });
+      if (!result.text?.trim()) throw new Error("Não encontrei fala reconhecível neste áudio.");
+      addImportedText(result, duration * 1000);
+      await save();
+      el.importStatus.textContent = "Transcrição concluída e salva neste aparelho.";
+      toast("Transcrição concluída.");
+    } catch (error) {
+      console.error(error);
+      el.importStatus.textContent = error.message || "Não foi possível transcrever este áudio.";
+      toast(error.message || "Falha na transcrição. Confira o formato do áudio e a conexão.", 5000);
+    } finally {
+      importing = false;
+      el.importBtn.disabled = false;
+      el.audioFile.value = "";
+    }
+  }
+
+  el.importBtn.addEventListener("click", () => el.audioFile.click());
+  el.audioFile.addEventListener("change", () => {
+    const file = el.audioFile.files[0];
+    el.audioFile.value = "";
+    importAudio(file);
+  });
+
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && status === "recording") lockScreen();
   });
@@ -499,7 +649,7 @@
   });
 
   window.addEventListener("beforeunload", (e) => {
-    if (status === "recording" || status === "paused") { e.preventDefault(); e.returnValue = ""; }
+    if (status === "recording" || status === "paused" || importing) { e.preventDefault(); e.returnValue = ""; }
   });
 
   // ---------- Ajustes ----------
@@ -682,7 +832,8 @@ ${body}
     if (kind === "doc") download(new Blob(["﻿", toDOC()], { type: "application/msword" }), base + ".doc");
     if (kind === "audio") {
       if (!session.audio) { toast(status === "recording" || status === "paused" ? "Encerre a gravação para baixar o áudio." : "Esta sessão não tem áudio."); return; }
-      download(session.audio, base + "." + audioExt(session.mime || ""));
+      const importedExt = session.audioName?.split(".").pop();
+      download(session.audio, base + "." + (importedExt || audioExt(session.mime || "")));
     }
   });
 

@@ -1,11 +1,13 @@
 # Palavra — Estúdio de gravação e transcrição
 
 Aplicativo web para gravar **pregações, aulas e palestras** com **transcrição em tempo real**.
-Funciona direto no navegador, sem servidor e sem chave de API.
+Também importa arquivos de áudio e os transcreve no próprio aparelho, sem servidor ou chave de API.
 
 ## O que ele faz
 
 - Grava o áudio pelo microfone e transcreve ao vivo, em português (ou inglês/espanhol)
+- Importa MP3, M4A, WAV, OGG, WebM e FLAC de até 45 minutos e gera a transcrição localmente
+- Baixa o modelo Whisper na primeira importação; o arquivo de áudio não é enviado para um serviço externo
 - Separa o texto em parágrafos automaticamente quando o pregador faz uma pausa
 - Marca o tempo de cada parágrafo; depois de gravar, clicar no tempo toca aquele trecho do áudio
 - Pausar / retomar / encerrar; botão (ou tecla **N**) para forçar novo parágrafo
@@ -16,8 +18,9 @@ Funciona direto no navegador, sem servidor e sem chave de API.
 
 ## Limitações importantes
 
-- **Navegador:** a transcrição ao vivo usa a Web Speech API. Funciona bem no **Google Chrome** e no **Microsoft Edge** (computador e Android). No Safari funciona parcialmente; no Firefox não funciona (a gravação de áudio continua funcionando).
-- **Internet:** no Chrome, o reconhecimento de voz é processado pelos servidores do Google, então é preciso estar conectado.
+- **Navegador:** a transcrição ao vivo usa a Web Speech API e funciona melhor no **Google Chrome** e no **Microsoft Edge**. A transcrição de arquivos usa Transformers.js e requer um navegador moderno.
+- **Internet:** a primeira transcrição de arquivo baixa o modelo Whisper do Hugging Face. Depois, o modelo fica em cache no navegador. A transcrição ao vivo no Chrome é processada pelos servidores do Google.
+- **Desempenho:** a transcrição de arquivos é feita no aparelho; o tempo depende da duração do áudio e da capacidade do dispositivo.
 - **Aba aberta:** mantenha a aba em primeiro plano durante a gravação. No celular, se a tela bloquear ou você trocar de app, a transcrição pode parar.
 - **Celular Android:** alguns aparelhos não deixam gravar o áudio e transcrever ao mesmo tempo (o microfone fica “ocupado”). No computador isso não acontece.
 - **Dados locais:** as sessões ficam salvas só naquele navegador/aparelho. Exporte o que for importante.

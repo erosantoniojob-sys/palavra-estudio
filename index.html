@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Palavra · Estúdio de Gravação e Transcrição</title>
   <meta name="description" content="Grave pregações, aulas e palestras com transcrição em tempo real." />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#f2f3ef" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,7 +29,7 @@
   </header>
 
   <div id="unsupported" class="banner" hidden>
-    Este navegador não oferece transcrição ao vivo. Abra o app no <strong>Google Chrome</strong> ou no <strong>Microsoft Edge</strong> (computador ou Android). A gravação do áudio continua funcionando.
+    A transcrição ao vivo funciona melhor no <strong>Google Chrome</strong> ou no <strong>Microsoft Edge</strong>. Você ainda pode importar um áudio para transcrever neste aparelho.
   </div>
 
   <main class="layout">
@@ -91,6 +91,24 @@
 
         <audio id="player" controls hidden></audio>
       </div>
+
+      <section class="importer" aria-labelledby="importTitle">
+        <div class="import-copy">
+          <span class="eyebrow">TRANSCRIÇÃO POR IA</span>
+          <h2 id="importTitle">Já tem uma gravação?</h2>
+          <p>Importe um áudio para transcrever neste aparelho, sem enviar o arquivo.</p>
+        </div>
+        <input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.webm,.flac" hidden />
+        <button id="btnImport" class="import-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 14v5h14v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Importar áudio</span>
+        </button>
+        <div id="importProgress" class="import-progress" hidden>
+          <progress aria-label="Progresso da transcrição"></progress>
+          <p id="importStatus" role="status" aria-live="polite"></p>
+        </div>
+        <p class="import-note">MP3, M4A, WAV, OGG ou WebM · até 45 min · requer internet na primeira utilização</p>
+      </section>
 
       <details class="settings">
         <summary>Ajustes</summary>
