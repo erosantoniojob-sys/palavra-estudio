@@ -1,0 +1,11 @@
+{
+  "name": "Palavra — Estúdio de Gravação e Transcrição",
+  "short_name": "Palavra",
+  "description": "Grave pregações e aulas com transcrição em tempo real.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "lang": "pt-BR",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

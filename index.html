@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Palavra · Estúdio de Gravação e Transcrição</title>
+  <meta name="description" content="Grave pregações, aulas e palestras com transcrição em tempo real." />
+  <meta name="theme-color" content="#000000" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <strong>Palavra</strong>
+        <span class="brand-sub">Estúdio de gravação e transcrição</span>
+      </div>
+    </div>
+    <nav class="top-actions">
+      <button id="btnNew" class="ghost">Nova sessão</button>
+      <button id="btnHistory" class="ghost">Arquivo</button>
+    </nav>
+  </header>
+
+  <div id="unsupported" class="banner" hidden>
+    Este navegador não oferece transcrição ao vivo. Abra o app no <strong>Google Chrome</strong> ou no <strong>Microsoft Edge</strong> (computador ou Android). A gravação do áudio continua funcionando.
+  </div>
+
+  <main class="layout">
+    <!-- Painel de gravação -->
+    <section class="studio">
+      <div class="meta">
+        <label class="field field-title">
+          <span>Título</span>
+          <input id="inTitle" type="text" placeholder="Ex.: Romanos 8 — Nenhuma condenação" />
+        </label>
+        <label class="field">
+          <span>Pregador / professor</span>
+          <input id="inSpeaker" type="text" placeholder="Nome" />
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Tipo</span>
+            <select id="inKind">
+              <option>Pregação</option>
+              <option>Aula</option>
+              <option>Palestra</option>
+              <option>Estudo bíblico</option>
+              <option>Entrevista</option>
+              <option>Outro</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Idioma</span>
+            <select id="inLang">
+              <option value="pt-BR">Português (BR)</option>
+              <option value="pt-PT">Português (PT)</option>
+              <option value="en-US">English (US)</option>
+              <option value="es-ES">Español</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="deck">
+        <div class="deck-head">
+          <span id="status" class="status" data-state="idle"><i></i><b>Pronto</b></span>
+          <span id="saveState" class="save-state"></span>
+        </div>
+        <div id="timer" class="timer">00:00:00</div>
+        <canvas id="wave" class="wave" height="80"></canvas>
+
+        <div class="controls">
+          <button id="btnStop" class="ctl" title="Encerrar" aria-label="Encerrar gravação" disabled>
+            <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+          <button id="btnRec" class="rec" title="Gravar (espaço)" aria-label="Gravar">
+            <span class="rec-dot"></span>
+          </button>
+          <button id="btnPara" class="ctl" title="Novo parágrafo (N)" aria-label="Forçar novo parágrafo" disabled>
+            <svg viewBox="0 0 24 24"><path d="M10 4h9M10 4v16M15 4v16M10 4a4 4 0 0 0 0 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <p class="hint" id="hint">Toque no botão vermelho para começar. <kbd>Espaço</kbd> grava/pausa · <kbd>N</kbd> novo parágrafo</p>
+
+        <audio id="player" controls hidden></audio>
+      </div>
+
+      <details class="settings">
+        <summary>Ajustes</summary>
+        <label class="check"><input type="checkbox" id="optPunct" checked /> Pontuação e maiúsculas automáticas</label>
+        <label class="check"><input type="checkbox" id="optTs" checked /> Mostrar marcas de tempo</label>
+        <label class="range">
+          <span>Pausa para novo parágrafo: <b id="gapVal">2,5 s</b></span>
+          <input type="range" id="optGap" min="1" max="6" step="0.5" value="2.5" />
+        </label>
+      </details>
+    </section>
+
+    <!-- Transcrição -->
+    <section class="paper">
+      <div class="paper-head">
+        <div class="stats"><span id="stWords">0 palavras</span><span>·</span><span id="stParas">0 parágrafos</span></div>
+        <div class="exports">
+          <button class="chip" id="btnCopy">Copiar</button>
+          <div class="menu">
+            <button class="chip" id="btnExport">Exportar ▾</button>
+            <div class="menu-list" id="exportMenu" hidden>
+              <button data-exp="doc">Word (.doc)</button>
+              <button data-exp="txt">Texto (.txt)</button>
+              <button data-exp="md">Markdown (.md)</button>
+              <button data-exp="srt">Legendas (.srt)</button>
+              <button data-exp="audio">Áudio da gravação</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <article id="doc" class="doc">
+        <header class="doc-head">
+          <p class="doc-kind" id="docKind">Pregação</p>
+          <h1 id="docTitle">Sem título</h1>
+          <p class="doc-by" id="docBy"></p>
+        </header>
+        <div id="paras" class="paras"></div>
+        <p id="interim" class="interim"></p>
+        <div id="empty" class="empty">
+          <p>A transcrição aparece aqui enquanto o pregador fala.</p>
+          <p class="muted">Depois de encerrar, você pode corrigir qualquer trecho clicando no texto.</p>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- Arquivo / histórico -->
+  <aside id="drawer" class="drawer" hidden>
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <h2>Arquivo</h2>
+        <button class="ghost" id="btnCloseDrawer" aria-label="Fechar">✕</button>
+      </div>
+      <p class="muted small">Sessões ficam salvas neste navegador, neste aparelho.</p>
+      <ul id="sessionList" class="session-list"></ul>
+    </div>
+  </aside>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
